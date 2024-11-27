@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Singapore Map Visualization</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        /* Add some basic styling */
+        svg {
+            border: 1px solid black;
+            background-color: #f4f4f4;
+        }
+    </style>
+</head>
+<body>
+<svg id="map" width="1000" height="600"></svg>
+
+<script>
+    // Define dimensions and create an SVG element
+    let width = 1000, height = 600;
+    let svg = d3.select("#map")
+        .attr("viewBox", "0 0 " + width + " " + height);
+
+    // Define the geo projection and path
+    let projection = d3.geoMercator()
+        .center([103.851959, 1.290270])
+        .fitExtent([[20, 20], [980, 580]], null); // Update with actual data once loaded
+
+    let geoPath = d3.geoPath().projection(projection);
+
+    // Load external data
+    d3.json("https://raw.githubusercontent.com/chen1guanyu/HCDIV-4/7652f7c938f70d71362499e7f705e5e005d78d67/Singapore%20Subzones.json").then(mapData => {
+        // Load population data
+        return Promise.all([
+            mapData,
+            d3.csv("https://raw.githubusercontent.com/chen1guanyu/HCDIV-4/7652f7c938f70d71362499e7f705e5e005d78d67/Singapore%20Population.csv").then(popData => {
+                // Merge pop data with map data
+                mapData.features.forEach(d => {
+                    let subzone = popData.find(e => e.Subzone.toUpperCase() === d.properties.Name);
+                    d.properties.popdata = (subzone !== undefined) ? parseInt(subzone.Population, 10) : 0;
+                });
+                return mapData;
+            })
+        ]);
+    }).then(data => {
+        let mapData = data[0].features;
+
+        // Draw the map
+        svg.append("g")
+            .attr("id", "districts")
+            .selectAll("path")
+            .data(mapData)
+            .enter()
+            .append("path")
+            .attr("d", geoPath)
+            .attr("stroke", "black")
+            .attr("fill", "grey");
+    });
+</script>
+</body>
+</html>
