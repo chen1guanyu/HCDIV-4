@@ -1,54 +1,150 @@
-
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <style></style>
+  <style>
+    body {
+      margin: 0;
+      background-color: #f5f5dc; /* 淡米黄色背景 */
+    }
+    .tooltip {
+      position: absolute;
+      background-color: white;
+      border: 1px solid black;
+      padding: 5px;
+      font-size: 14px;
+      pointer-events: none;
+      box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.3);
+    }
+    .title {
+      text-align: center;
+      font-size: 24px;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      margin: 20px 0;
+      color: #333;
+    }
+  </style>
 </head>
 <body>
+<div class="title">Singapore Population Map 2023</div>
 <svg></svg>
+<div class="tooltip" style="opacity: 0;"></div>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 
 <script>
-
 let width = 1000, height = 600;
 
+// Create SVG and Tooltip elements
 let svg = d3.select("svg")
     .attr("viewBox", "0 0 " + width + " " + height)
+    .style("background-color", "#f5f5dc"); // 设置地图背景为淡米黄色
 
-// Load external data and boot
+let tooltip = d3.select(".tooltip");
+
+// Load external data and process
 Promise.all([d3.json("sgmap.json"), d3.csv("population2023.csv")]).then(data => {
+  let mapData = data[0].features;
+  let popData = data[1];
 
-let mapData = data[0].features;
-let popData = data[1];
+  // Merge population data with map data
+  mapData.forEach(d => {
+    let subzone = popData.find(e => e.Subzone.toUpperCase() === d.properties.Name.toUpperCase());
+    d.popdata = (subzone !== undefined) ? parseInt(subzone.Population) : 0;
+  });
 
-// Merge pop data with map data
-mapData.forEach(d => {
-  let subzone = popData.find(e => e.Subzone.toUpperCase() == d.properties.Name);
-  d.popdata = (subzone != undefined) ? parseInt(subzone.Population) : 0;
-})
+  // Define population thresholds and colors
+  let colorScale = d3.scaleThreshold()
+    .domain([20000, 40000, 60000, 80000, 100000, 120000])
+    .range(["#b0e2b5", "#85d181", "#5eb961", "#e3be72", "#db905b", "#d06a48", "#c0402f"]);
 
-console.log(mapData);
+  // Map and projection
+  let projection = d3.geoMercator()
+      .center([103.851959, 1.290270])
+      .fitExtent([[20, 20], [980, 580]], data[0]);
 
-// Map and projection
-let projection = d3.geoMercator()
-    .center([103.851959, 1.290270])
-    .fitExtent([[20, 20], [980, 580]], data[0]);
+  let geopath = d3.geoPath().projection(projection);
 
-let geopath = d3.geoPath().projection(projection);
+  // Draw map
+  svg.append("g")
+      .attr("id", "districts")
+      .selectAll("path")
+      .data(mapData)
+      .enter()
+      .append("path")
+      .attr("d", geopath)
+      .attr("stroke", "black")
+      .attr("fill", d => colorScale(d.popdata))
+      .on("mouseover", function (event, d) {
+        // Show tooltip
+        tooltip.style("opacity", 1)
+            .html(`<strong>${d.properties.Name}</strong><br>Population: ${d.popdata}`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
 
-svg.append("g")
-    .attr("id", "districts")
-    .selectAll("path")
-    .data(mapData)
+        // Highlight hovered district
+        d3.select(this)
+          .attr("stroke-width", 2)
+          .attr("fill", "orange")
+          .raise();
+      })
+      .on("mousemove", function (event) {
+        // Update tooltip position
+        tooltip.style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+      })
+      .on("mouseout", function () {
+        // Hide tooltip
+        tooltip.style("opacity", 0);
+
+        // Reset district style
+        d3.select(this)
+          .attr("stroke-width", 1)
+          .attr("fill", d => colorScale(d.popdata));
+      });
+
+  // Add legend
+  drawLegend();
+});
+
+// Draw legend in the bottom-right corner
+function drawLegend() {
+  let legendData = [
+    { color: "#b0e2b5", label: "0 - 20,000" },
+    { color: "#85d181", label: "20,001 - 40,000" },
+    { color: "#5eb961", label: "40,001 - 60,000" },
+    { color: "#e3be72", label: "60,001 - 80,000" },
+    { color: "#db905b", label: "80,001 - 100,000" },
+    { color: "#d06a48", label: "100,001 - 120,000" },
+    { color: "#c0402f", label: "120,001+" }
+  ];
+
+  let legend = svg.append("g")
+    .attr("id", "legend")
+    .attr("transform", `translate(${width - 250}, ${height - 200})`);
+
+  // Draw legend boxes and labels
+  legend.selectAll("rect")
+    .data(legendData)
     .enter()
-    .append("path")
-    .attr("d", geopath)
-    .attr("stroke", "black")
-    .attr("fill", "grey");
-})
+    .append("rect")
+    .attr("x", 0)
+    .attr("y", (d, i) => i * 25)
+    .attr("width", 20)
+    .attr("height", 20)
+    .attr("fill", d => d.color)
+    .attr("stroke", "black");
 
+  legend.selectAll("text")
+    .data(legendData)
+    .enter()
+    .append("text")
+    .attr("x", 30)
+    .attr("y", (d, i) => i * 25 + 15)
+    .text(d => d.label)
+    .style("font-size", "12px")
+    .style("alignment-baseline", "middle");
+}
 </script>
-
 </body>
 </html>
